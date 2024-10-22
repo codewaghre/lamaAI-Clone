@@ -5,7 +5,7 @@ import { IKContext, IKImage, IKUpload } from 'imagekitio-react';
 //forr Process The Image 
 const publicKey = import.meta.env.VITE_IMAGE_KIT_PUBLIC_KEY;
 const urlEndpoint = import.meta.env.VITE_IMAGE_KIT_ENDPOINT_KEY;
-const authenticator =  async () => {
+const authenticator = async () => {
     try {
         const response = await fetch('http://localhost:3000/api/v1/files/upload');
 
@@ -24,8 +24,8 @@ const authenticator =  async () => {
 
 
 function Upload({ setImg }) {
-    
-const ikUplaodRef = useRef(null)
+
+    const ikUplaodRef = useRef(null)
 
     const onError = err => {
         console.log("Error", err);
@@ -33,7 +33,7 @@ const ikUplaodRef = useRef(null)
 
     const onSuccess = res => {
         console.log("Success", res);
-        setImg((prev) => ({...prev, isLoading:false , dbData: res}))
+        setImg((prev) => ({ ...prev, isLoading: false, dbData: res }))
     };
 
     const onUploadProgress = progress => {
@@ -42,13 +42,30 @@ const ikUplaodRef = useRef(null)
 
     const onUploadStart = evt => {
         console.log("Start", evt);
+
+        const file = evt.target.files[0];
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setImg((prev) => ({
+                ...prev,
+                isLoading: true,
+                aiData: {
+                    inlineData: {
+                        data: reader.result.split(",")[1],
+                        mimeType: file.type,
+                    },
+                },
+            }));
+        };
+        reader.readAsDataURL(file);
     };
 
 
 
     return (
         <>
-            
+
             <div className="App">
                 <IKContext
                     urlEndpoint={urlEndpoint}
@@ -66,7 +83,7 @@ const ikUplaodRef = useRef(null)
                         style={{ display: "none" }}
                         ref={ikUplaodRef}
                     />
-                      <label onClick={ () => ikUplaodRef.current.click()}>
+                    <label onClick={() => ikUplaodRef.current.click()}>
                         <img src='/attachment.png'></img>
                     </label>
                 </IKContext>
