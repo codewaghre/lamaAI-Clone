@@ -5,11 +5,12 @@ import Markdown from "react-markdown";
 import Upload from '../uploads/upload';
 import { IKImage } from 'imagekitio-react';
 import model from '../../lib/gemini';
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+function NewPrompt({data}) {
 
-function NewPrompt() {
-
-    const endRef = useRef(null)
+    const endRef = useRef(null);
+  const formRef = useRef(null);
     const [question, setquestion] = useState("")
     const [answer, setAnswer] = useState("");
 
@@ -21,6 +22,7 @@ function NewPrompt() {
     })
 
 
+    // Ai model 
     const chat = model.startChat({
         history: [
             {
@@ -37,46 +39,93 @@ function NewPrompt() {
         }
     });
 
+
     useEffect(() => {
         endRef.current.scrollIntoView({ behavior: "smooth" })
-    }, [question, answer, img.data])
+    }, [data,question, answer, img.data])
+
+     const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      return fetch(`${import.meta.env.VITE_API_URL}/api/chats/${data._id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: question.length ? question : undefined,
+          answer,
+          img: img.dbData?.filePath || undefined,
+        }),
+      }).then((res) => res.json());
+    },
+    onSuccess: () => {
+      queryClient
+        .invalidateQueries({ queryKey: ["chat", data._id] })
+        .then(() => {
+          formRef.current.reset();
+          setquestion("");
+          setAnswer("");
+          setImg({
+            isLoading: false,
+            error: "",
+            dbData: {},
+            aiData: {},
+          });
+        });
+    },
+    onError: (err) => {
+      console.log(err);
+    },
+  });
 
     // Testing model Promt
-    const add = async (text) => {
-        // const prompt = "Write a story about a magic backpack.";
 
-        setquestion(text)
+    const add = async (text, isInitial) => {
+        
+         if (!isInitial) setquestion(text);
 
-        //first way 
-        const result = await chat.sendMessageStream(Object.entries(img.aiData).length ? [img.aiData, text] : [text]);
+        try {
+            const result = await chat.sendMessageStream(Object.entries(img.aiData).length ? [img.aiData, text] : [text]);
         let accumulatedText = "";
-        for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            console.log(chunkText);
-            accumulatedText += chunkText;
-            setAnswer(accumulatedText);
+            for await (const chunk of result.stream) {
+                const chunkText = chunk.text();
+                console.log(chunkText);
+                accumulatedText += chunkText;
+                setAnswer(accumulatedText);
+
+            }
+              mutation.mutate();
+
+            
+        } catch (error) {
+             console.log(err);
+        }
         }
 
-        //for tesitng 
-        // const text = response.text()
-        // console.log(text);
-
-
-        //second way 
-        // const result = await model.generateContent(prompt);
-        // console.log(result.response.text());
-
-
-    }
-
+    
     const handlesubmit = (e) => {
         e.preventDefault();
 
         const text = e.target.text.value
         if (!text) return;
 
-        add(text)
+        add(text, false)
     }
+
+     // IN PRODUCTION WE DON'T NEED IT
+    const hasRun = useRef(false);
+    
+  useEffect(() => {
+    if (!hasRun.current) {
+      if (data?.history?.length === 1) {
+        add(data.history[0].parts[0].text, true);
+      }
+    }
+    hasRun.current = true;
+  }, []);
 
     return (
         <>
@@ -113,7 +162,7 @@ function NewPrompt() {
 
             {/* <button onClick={() => add()}>Tesr Ao</button> */}
             <div className='endChat' ref={endRef}></div>
-            <form className="newForm" onSubmit={handlesubmit}>
+            <form className="newForm" onSubmit={handlesubmit}  ref={formRef}>
 
                 {/* Uplaod Component here */}
                 <Upload setImg={setImg} />
